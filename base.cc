@@ -9,6 +9,7 @@
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/euler_angles.hpp>
 //OBJ Loader
 #include <OBJ_Loader/OBJ_Loader.h>
 //Standard Library
@@ -22,12 +23,14 @@ class MainWindow : public Gtk::Window
 {
 protected:
   Gtk::GLArea mGlArea;
-  Gtk::Label mTestLabel1;
-  Gtk::Label mTestLabel2;
-  Gtk::Label mTestLabel3;
-  Gtk::Label mTestLabel4;
+  Gtk::Label mLabelAngleX;
+  Gtk::Label mLabelAngleY;
+  Gtk::Label mLabelAngleZ;
   Gtk::Paned mPaned;
   Gtk::Grid mGrid;
+  Gtk::Scale mScaleAngleX;
+  Gtk::Scale mScaleAngleY;
+  Gtk::Scale mScaleAngleZ;
   GLuint vao, vbo;
   GLuint shaderProgram;
   std::vector<float> vertexPositions;
@@ -52,7 +55,6 @@ protected:
       std::cout << "ERROR: Can't load CanSat model." << std::endl;
       exit(EXIT_FAILURE);
     }
-    std::cout << "Number of Vertices: " << loader.LoadedVertices.size() << std::endl;
 
     for (int i = 0; i < loader.LoadedVertices.size(); i++)
     {
@@ -67,10 +69,10 @@ protected:
     vertex_shader_stream << vertex_shader_file.rdbuf();
     vertex_shader_file.close();
     std::string vertex_code = vertex_shader_stream.str();
-    const char* vertex_shader_code = vertex_code.c_str();
+    const char *vertex_shader_code = vertex_code.c_str();
 
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader,1,&vertex_shader_code,NULL);
+    glShaderSource(vertexShader, 1, &vertex_shader_code, NULL);
     glCompileShader(vertexShader);
 
     GLint success;
@@ -88,10 +90,10 @@ protected:
     fragment_shader_stream << fragment_shader_file.rdbuf();
     fragment_shader_file.close();
     std::string fragment_code = fragment_shader_stream.str();
-    const char* fragment_shader_code = fragment_code.c_str();
+    const char *fragment_shader_code = fragment_code.c_str();
 
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader,1,&fragment_shader_code,NULL);
+    glShaderSource(fragmentShader, 1, &fragment_shader_code, NULL);
     glCompileShader(fragmentShader);
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
@@ -107,7 +109,7 @@ protected:
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
-    
+
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
     if (!success)
     {
@@ -125,7 +127,6 @@ protected:
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid *)0);
 
     uniform_location_mvp = glGetUniformLocation(shaderProgram, "mvp");
-    std::cout << uniform_location_mvp << std::endl;
 
     //This point you have the context and you can use opengl methods.
     glClearColor(0.529f, 0.808f, 0.922f, 1.0f);
@@ -138,54 +139,80 @@ protected:
 
   bool onRender(const Glib::RefPtr<Gdk::GLContext> &context)
   {
-    glm::mat4 model(1.0f);
+    //Calculate model-view-projection matrix
+    glm::mat4 model = glm::eulerAngleYXZ(
+      glm::radians(mScaleAngleY.get_value()),
+      glm::radians(mScaleAngleX.get_value()),
+      glm::radians(mScaleAngleZ.get_value()));
 
     glm::mat4 view = glm::lookAt(
-        glm::vec3(0.5f, 0.5f, 0.5f),
+        glm::vec3(0.5f, 0.0f, 0.0f),
         glm::vec3(0.0f, 0.0f, 0.0f),
-        glm::vec3(0.0f, 0.0f, 1.0f));
+        glm::vec3(0.0f, 1.0f, 0.0f));
 
     auto allocation = mGlArea.get_allocation();
-
     glm::mat4 proj = glm::perspective(70.0f, float(allocation.get_width()) / float(allocation.get_height()), 0.01f, 100.0f);
 
     glm::mat4 mvp = proj * view * model;
-
+    
+    //Render
     glUseProgram(shaderProgram);
-
+    //Update model-view-projection matrix
     glUniformMatrix4fv(uniform_location_mvp, 1, GL_FALSE, glm::value_ptr(mvp));
-
+    //Clear framebuffer
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+    //Draw geometry
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLES, 0, vertexPositions.size());
-    glBindVertexArray(0);
+  }
+
+  void redraw_glarea(){
+    mGlArea.queue_render();
   }
 
 public:
   MainWindow()
   {
+    //Window setup
     set_title("GWC CanSat GUI");
-    mTestLabel1.set_text("TEST1");
-    mTestLabel2.set_text("TEST2");
-    mTestLabel3.set_text("TEST3");
-    mTestLabel4.set_text("TEST4");
-    mTestLabel1.set_hexpand(true);
-    mTestLabel2.set_hexpand(true);
-    mTestLabel3.set_hexpand(true);
-    mTestLabel4.set_hexpand(true);
-    mTestLabel1.set_halign(Gtk::Align::ALIGN_START);
-    mTestLabel2.set_halign(Gtk::Align::ALIGN_START);
-    mTestLabel3.set_halign(Gtk::Align::ALIGN_START);
-    mTestLabel4.set_halign(Gtk::Align::ALIGN_START);
-    mGrid.attach(mTestLabel1, 0, 0);
-    mGrid.attach(mTestLabel2, 1, 0);
-    mGrid.attach(mTestLabel3, 0, 1);
-    mGrid.attach(mTestLabel4, 1, 1);
+    resize(400, 400);
+    //Label setup
+    mLabelAngleX.set_text(" Angle X: ");
+    mLabelAngleY.set_text(" Angle Y: ");
+    mLabelAngleZ.set_text(" Angle Z: ");
+    mLabelAngleX.set_halign(Gtk::Align::ALIGN_START);
+    mLabelAngleY.set_halign(Gtk::Align::ALIGN_START);
+    mLabelAngleZ.set_halign(Gtk::Align::ALIGN_START);
+    //Add labels to grid
+    mGrid.attach(mLabelAngleX, 0, 0);
+    mGrid.attach(mLabelAngleY, 0, 1);
+    mGrid.attach(mLabelAngleZ, 0, 2);
+    //Scale setup
+    mScaleAngleX.set_range(0.0, 360.0);
+    mScaleAngleY.set_range(0.0, 360.0);
+    mScaleAngleZ.set_range(0.0, 360.0);
+    mScaleAngleX.set_size_request(100,-1);
+    mScaleAngleY.set_size_request(100,-1);
+    mScaleAngleZ.set_size_request(100,-1);
+    mScaleAngleX.set_hexpand(true);
+    mScaleAngleY.set_hexpand(true);
+    mScaleAngleZ.set_hexpand(true);
+    mScaleAngleX.set_halign(Gtk::ALIGN_FILL);
+    mScaleAngleY.set_halign(Gtk::ALIGN_FILL);
+    mScaleAngleZ.set_halign(Gtk::ALIGN_FILL);
+    mScaleAngleX.signal_value_changed().connect(sigc::mem_fun(this, &MainWindow::redraw_glarea));
+    mScaleAngleY.signal_value_changed().connect(sigc::mem_fun(this, &MainWindow::redraw_glarea));
+    mScaleAngleZ.signal_value_changed().connect(sigc::mem_fun(this, &MainWindow::redraw_glarea));
+    //Add scales to grid
+    mGrid.attach(mScaleAngleX, 1, 0);
+    mGrid.attach(mScaleAngleY, 1, 1);
+    mGrid.attach(mScaleAngleZ, 1, 2);
+    //Pane setup
     mPaned.set_orientation(Gtk::Orientation::ORIENTATION_HORIZONTAL);
     mPaned.pack1(mGlArea);
     mPaned.pack2(mGrid, false, false);
     add(mPaned);
+    //GLArea setup
     mGlArea.set_auto_render();
     mGlArea.set_hexpand();
     mGlArea.set_vexpand();
@@ -193,11 +220,10 @@ public:
     mGlArea.set_valign(Gtk::ALIGN_FILL);
     mGlArea.set_size_request(32, 32);
     mGlArea.set_required_version(3, 3); //your desired gl version
-
     mGlArea.signal_realize().connect(sigc::mem_fun(this, &MainWindow::onRealize));
     mGlArea.signal_unrealize().connect(sigc::mem_fun(this, &MainWindow::onUnrealize), false);
     mGlArea.signal_render().connect(sigc::mem_fun(this, &MainWindow::onRender));
-
+    //Show everything, otherwise the window looks empty
     show_all();
   }
 };
@@ -206,6 +232,5 @@ int main(int argc, char *argv[])
 {
   Glib::RefPtr<Gtk::Application> app = Gtk::Application::create(argc, argv, "org.gtkmm.examples.base");
   MainWindow mainWindow;
-  mainWindow.resize(400, 400);
   return app->run(mainWindow);
 }
