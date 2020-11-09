@@ -8,26 +8,15 @@
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 //OBJ Loader
 #include <OBJ_Loader/OBJ_Loader.h>
 //Standard Library
 #include <iostream>
 #include <algorithm>
+#include <istream>
 
 //TODO: Move shaders to their own file
-const GLchar *vertexShaderSource = "#version 330 core\n"
-                                   "layout (location = 0) in vec3 position;\n"
-                                   "void main()\n"
-                                   "{\n"
-                                   "gl_Position = vec4(position.x, position.y, position.z, 1.0);\n"
-                                   "}\0";
-
-const GLchar *fragmentShaderSource = "#version 330 core\n"
-                                     "out vec4 color;\n"
-                                     "void main()\n"
-                                     "{\n"
-                                     "color = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
-                                     "}\n\0";
 
 class MainWindow : public Gtk::Window
 {
@@ -42,6 +31,7 @@ protected:
   GLuint vao, vbo;
   GLuint shaderProgram;
   std::vector<float> vertexPositions;
+  GLint uniform_location_mvp;
 
   void onRealize()
   {
@@ -64,15 +54,23 @@ protected:
     }
     std::cout << "Number of Vertices: " << loader.LoadedVertices.size() << std::endl;
 
-    
-    for(int i = 0; i < loader.LoadedVertices.size(); i++){
+    for (int i = 0; i < loader.LoadedVertices.size(); i++)
+    {
       vertexPositions.push_back(loader.LoadedVertices[i].Position.X);
       vertexPositions.push_back(loader.LoadedVertices[i].Position.Y);
       vertexPositions.push_back(loader.LoadedVertices[i].Position.Z);
     }
 
+    std::ifstream vertex_shader_file;
+    vertex_shader_file.open("assets/shaders/simple.vert");
+    std::stringstream vertex_shader_stream;
+    vertex_shader_stream << vertex_shader_file.rdbuf();
+    vertex_shader_file.close();
+    std::string vertex_code = vertex_shader_stream.str();
+    const char* vertex_shader_code = vertex_code.c_str();
+
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glShaderSource(vertexShader,1,&vertex_shader_code,NULL);
     glCompileShader(vertexShader);
 
     GLint success;
@@ -84,8 +82,16 @@ protected:
       std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED: " << infoLog << std::endl;
     }
 
+    std::ifstream fragment_shader_file;
+    fragment_shader_file.open("assets/shaders/simple.frag");
+    std::stringstream fragment_shader_stream;
+    fragment_shader_stream << fragment_shader_file.rdbuf();
+    fragment_shader_file.close();
+    std::string fragment_code = fragment_shader_stream.str();
+    const char* fragment_shader_code = fragment_code.c_str();
+
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glShaderSource(fragmentShader,1,&fragment_shader_code,NULL);
     glCompileShader(fragmentShader);
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
@@ -97,6 +103,11 @@ protected:
       std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED: " << infoLog << std::endl;
     }
 
+    shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+    
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
     if (!success)
     {
@@ -106,31 +117,46 @@ protected:
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
-
-    shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, vertexPositions.size() * sizeof(vertexPositions[0]), vertexPositions.data(), GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat),(GLvoid*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid *)0);
+
+    uniform_location_mvp = glGetUniformLocation(shaderProgram, "mvp");
+    std::cout << uniform_location_mvp << std::endl;
 
     //This point you have the context and you can use opengl methods.
     glClearColor(0.529f, 0.808f, 0.922f, 1.0f);
   }
 
-  void onUnrealize(){
+  void onUnrealize()
+  {
     //your cleanUp. Deleting Vao etc.
   }
 
-  bool onRender(const Glib::RefPtr<Gdk::GLContext> &context){
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  bool onRender(const Glib::RefPtr<Gdk::GLContext> &context)
+  {
+    glm::mat4 model(1.0f);
+
+    glm::mat4 view = glm::lookAt(
+        glm::vec3(0.5f, 0.5f, 0.5f),
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 1.0f));
+
+    auto allocation = mGlArea.get_allocation();
+
+    glm::mat4 proj = glm::perspective(70.0f, float(allocation.get_width()) / float(allocation.get_height()), 0.01f, 100.0f);
+
+    glm::mat4 mvp = proj * view * model;
 
     glUseProgram(shaderProgram);
+
+    glUniformMatrix4fv(uniform_location_mvp, 1, GL_FALSE, glm::value_ptr(mvp));
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLES, 0, vertexPositions.size());
     glBindVertexArray(0);
