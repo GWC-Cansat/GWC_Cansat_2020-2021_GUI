@@ -47,6 +47,12 @@ protected:
     if (!gladLoadGL()) {
         std::cout << "Failed to initialize OpenGL context" << std::endl;
     }
+    
+    /*
+    glClearColor (0.0, 0.0, 1.0, 1.0);
+    glShadeModel(GL_FLAT);
+    glEnable(GL_DEPTH_TEST);
+    */
    
     //Load Resources
     //Load CanSat Model
@@ -137,11 +143,46 @@ protected:
 
   void onUnrealize()
   {
-    //Cleanup. Deleting Vao etc.
+    //your cleanUp. Deleting Vao etc.
   }
 
   bool onRender(const Glib::RefPtr<Gdk::GLContext> &context)
   {
+    //Report OpenGL Details
+    int major;
+    int minor;
+    context->get_version(major,minor);
+    if(context->get_use_es()){
+        std::cout << "Using OpenGL ES " << major << "." << minor << std::endl;
+    }else{
+        std::cout << "Using OpenGL " << major << "." << minor << std::endl;
+    }
+    /*
+    auto allocation = mGlArea.get_allocation();
+    glViewport(0, 0, (GLsizei) allocation.get_width(), (GLsizei) allocation.get_height());
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(60.0, float(allocation.get_width()) / float(allocation.get_height()), 1.0, 30.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glTranslatef(0.0, 0.0, -3.6);
+    
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glBegin(GL_QUADS);
+    glVertex3f(-2.0, -1.0, 0.0);
+    glVertex3f(-2.0, 1.0, 0.0);
+    glVertex3f(0.0, 1.0, 0.0);
+    glVertex3f(0.0, -1.0, 0.0);
+
+    glVertex3f(1.0, -1.0, 0.0);
+    glVertex3f(1.0, 1.0, 0.0);
+    glVertex3f(2.41421, 1.0, -1.41421);
+    glVertex3f(2.41421, -1.0, -1.41421);
+    glEnd();
+    glFlush();
+    */
+    
     //Calculate model-view-projection matrix
     glm::mat4 model = glm::eulerAngleYXZ(
       glm::radians(mScaleAngleY.get_value()),
@@ -205,6 +246,9 @@ public:
     mScaleAngleX.set_halign(Gtk::ALIGN_FILL);
     mScaleAngleY.set_halign(Gtk::ALIGN_FILL);
     mScaleAngleZ.set_halign(Gtk::ALIGN_FILL);
+    //mScaleAngleX.signal_value_changed().connect(sigc::mem_fun(this, &MainWindow::redraw_glarea));
+    //mScaleAngleY.signal_value_changed().connect(sigc::mem_fun(this, &MainWindow::redraw_glarea));
+    //mScaleAngleZ.signal_value_changed().connect(sigc::mem_fun(this, &MainWindow::redraw_glarea));
     //Add scales to grid
     mGrid.attach(mScaleAngleX, 1, 0);
     mGrid.attach(mScaleAngleY, 1, 1);
@@ -229,6 +273,7 @@ public:
     add_tick_callback(sigc::mem_fun(this, &MainWindow::graphicsBodge));
     //Show everything, otherwise the window looks empty
     show_all();
+    //mGlArea.hide();
   }
 };
 
