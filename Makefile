@@ -11,4 +11,4 @@ LDFLAGS =
 all: gui
 
 gui:  base.cc
-	$(CC) $(CFLAGS) $(INCLUDE) base.cc glad.c $(LDFLAGS) $(LDLIBS) -o gui
+	$(CC) $(CFLAGS) $(INCLUDE) base.cc $(LDFLAGS) $(LDLIBS) -o gui
