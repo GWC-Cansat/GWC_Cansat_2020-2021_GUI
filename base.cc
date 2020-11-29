@@ -1,5 +1,3 @@
-//GLAD (OpenGL)
-#include <glad/glad.h>
 //GTK (GIMP ToolKit)
 #include <gtkmm/window.h>
 #include <gtkmm/scale.h>
@@ -8,7 +6,12 @@
 #include <gtkmm/paned.h>
 #include <gtkmm/grid.h>
 #include <giomm/resource.h>
+#include <gtkmm/application.h>
 #include <gdkmm/frameclock.h>
+#include <gtkmm/main.h>
+//Epoxy (OpenGL)
+#include <epoxy/gl.h>
+#include <epoxy/glx.h>
 //GLM (OpenGL Mathematics Library)
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -39,14 +42,23 @@ protected:
   GLuint shaderProgram;
   std::vector<float> vertexPositions;
   GLint uniform_location_mvp;
-
+  
+  bool onKeyPress(GdkEventKey* key_event){
+    if(key_event->keyval == GDK_KEY_Escape){
+      Gtk::Main::quit();
+      return true;
+    }
+    return false;
+  }
+  
+  
   void onRealize()
   {
     mGlArea.make_current();
     
-    if (!gladLoadGL()) {
-        std::cout << "Failed to initialize OpenGL context" << std::endl;
-    }
+    //if (!gladLoadGLLoader((GLADloadproc)glXGetProcAddress)) {
+    //    std::cout << "Failed to initialize OpenGL context" << std::endl;
+    //}
    
     //Load Resources
     //Load CanSat Model
@@ -175,6 +187,10 @@ protected:
       return true;
   }
   
+  void redraw_glarea(){
+    mGlArea.queue_render();
+  }
+  
 public:
   MainWindow()
   {
@@ -205,6 +221,10 @@ public:
     mScaleAngleX.set_halign(Gtk::ALIGN_FILL);
     mScaleAngleY.set_halign(Gtk::ALIGN_FILL);
     mScaleAngleZ.set_halign(Gtk::ALIGN_FILL);
+    
+    mScaleAngleX.signal_value_changed().connect(sigc::mem_fun(this, &MainWindow::redraw_glarea));
+    mScaleAngleY.signal_value_changed().connect(sigc::mem_fun(this, &MainWindow::redraw_glarea));
+    mScaleAngleZ.signal_value_changed().connect(sigc::mem_fun(this, &MainWindow::redraw_glarea));
     //Add scales to grid
     mGrid.attach(mScaleAngleX, 1, 0);
     mGrid.attach(mScaleAngleY, 1, 1);
@@ -226,8 +246,11 @@ public:
     mGlArea.signal_unrealize().connect(sigc::mem_fun(this, &MainWindow::onUnrealize), false);
     mGlArea.signal_render().connect(sigc::mem_fun(this, &MainWindow::onRender));
     //Ignore this
-    add_tick_callback(sigc::mem_fun(this, &MainWindow::graphicsBodge));
+    //add_tick_callback(sigc::mem_fun(this, &MainWindow::graphicsBodge));
     //Show everything, otherwise the window looks empty
+    
+    this->signal_key_press_event().connect(sigc::mem_fun(*this, &MainWindow::onKeyPress), false);
+    
     show_all();
   }
 };
